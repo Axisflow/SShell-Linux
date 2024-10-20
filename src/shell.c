@@ -1,27 +1,47 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <wordexp.h>
 #include "shell.h"
-#include "utility/bool.h"
 #include "readline/readline.h"
 #include "readline/history.h"
 
-int shell(void) {
+int shell(char history_flag) {
     char *host;
     str prompt, command;
+    wordexp_t p;
 
     str_init(&prompt); str_init(&command);
     host = (char*)malloc(sizeof(char) * (1 + _SC_HOST_NAME_MAX));
+    wordexp(HISTORY_FILE, &p, 0);
 
-    using_history();
+    if(history_flag & USE_HISTORY_FILE) {
+        if(access(p.we_wordv[0], F_OK) == -1) {
+            FILE *file = fopen(p.we_wordv[0], "w");
+            if (file == NULL) {
+                fprintf(stderr, "Error: Cannot create history file.\n");
+                using_history();
+            } else {
+                fclose(file);
+                read_history(p.we_wordv[0]);
+            }
+        }
+    } else if(history_flag & SAVE_HISTORY) {
+        using_history();
+    } else {
+        history_flag = false;
+    }
+
     while(true) {
         gethostname(host, _SC_HOST_NAME_MAX);
         set_prompt(&prompt, getenv("USER"), host, getenv("PWD"), "@");
-        get_command(&command, &prompt, true);
+        get_command(&command, &prompt, history_flag);
 
         str_push_back(&command, '\n');
         str_print(&command);
     }
+
+    if(history_flag) write_history(p.we_wordv[0]);
 
     str_del(&prompt);
     str_del(&command);
