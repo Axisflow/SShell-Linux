@@ -35,8 +35,12 @@ void str_extend(str *t, str *s);
 void str_print(str *t);
 
 // Additional functions
+
+// remember to free the returned string by calling str_del
 str *str_from(const char *s);
+// remember to free the returned string by calling free
 char *str_to(str *t);
+
 void str_assign_cstr(str *t, const char *s);
 void str_extend_cstr(str *t, const char *s);
 
