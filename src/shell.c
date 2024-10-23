@@ -3,12 +3,15 @@
 #include <stdlib.h>
 #include <wordexp.h>
 #include "shell.h"
+#include "state.h"
+#include "executor.h"
 #include "readline/readline.h"
 #include "readline/history.h"
 
 int shell(char history_flag) {
     char *host;
     str prompt, command;
+    shell_state state;
     wordexp_t p;
 
     str_init(&prompt); str_init(&command);
@@ -25,6 +28,8 @@ int shell(char history_flag) {
                 fclose(file);
                 read_history(p.we_wordv[0]);
             }
+        } else {
+            read_history(p.we_wordv[0]);
         }
     } else if(history_flag & SAVE_HISTORY) {
         using_history();
@@ -37,17 +42,18 @@ int shell(char history_flag) {
         set_prompt(&prompt, getenv("USER"), host, getenv("PWD"), "@");
         get_command(&command, &prompt, history_flag);
 
-        str_push_back(&command, '\n');
-        str_print(&command);
-    }
+        state.prompt = &prompt;
+        state.command = &command;
+        eval(&state);
 
-    if(history_flag) write_history(p.we_wordv[0]);
+        if(history_flag) write_history(p.we_wordv[0]);
+    }
 
     str_del(&prompt);
     str_del(&command);
     free(host);
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 void convert_to_prompt_path(str *path, const char *pwd, const char *home) {
