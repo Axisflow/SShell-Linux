@@ -10,8 +10,11 @@ typedef struct STRVEC {
 } strvec;
 
 void strvec_init(strvec *t);
-void strvec_del(strvec *t);
 strvec *strvec_copy(strvec *t);
+void strvec_del(strvec *t);
+
+size_t strvec_cmp(strvec *t, strvec *s);
+size_t strvec_idx(strvec *t, str *s);
 
 str *strvec_at(strvec *t, size_t i);
 str *strvec_begin(strvec *t);
@@ -32,11 +35,14 @@ void strvec_pop_back(strvec *t);
 void strvec_assign(strvec *t, strvec *s);
 void strvec_extend(strvec *t, strvec *s);
 
+void strvec_print_splice(const strvec *t, const str *delim);
 void strvec_print(strvec *t);
 
 // Additional functions
-strvec *strvec_from(str *s, const char *delim);
-str *strvec_to(strvec *t, const char *delim);
-void strvec_print_splice(strvec *t, const char *delim);
+strvec *strvec_from_cstr(const char *s, const str *delim);
+char *strvec_to_cstr(const strvec *t, const str *delim);
+
+strvec *strvec_from(const str *s, const str *delim);
+str *strvec_to(const strvec *t, const str *delim);
 
 #endif // STRVEC_H

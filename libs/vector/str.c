@@ -4,12 +4,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+const str *STR_EMPTY = &(str){.data = "", .size = 0, .capacity = 0};
+const str *STR_NEWLINE = &(str){.data = "\n", .size = 1, .capacity = 1};
+const str *STR_SPACE = &(str){.data = " ", .size = 1, .capacity = 1};
+
 void __str_optimal_capacity(str *t, size_t target_capacity);
 
 void str_init(str *t) {
-    t->data = (char*)malloc(VEC_INIT_CAPACITY * sizeof(char));
     t->size = 0;
     t->capacity = VEC_INIT_CAPACITY;
+    t->data = (char*)malloc(t->capacity * sizeof(char));
 }
 
 void str_del(str *t) {
@@ -26,6 +30,75 @@ str *str_copy(str *t) {
     memcpy(s->data, t->data, t->size * sizeof(char));
 
     return s;
+}
+
+size_t str_cmp(str *t, str *s) { 
+    size_t i = 0;
+    while(i < t->size && i < s->size) {
+        if(t->data[i] > s->data[i]) return i + 1;
+        if(t->data[i] < s->data[i]) return -(i + 1);
+        ++i;
+    }
+
+    if(t->size > s->size) return i + 1;
+    if(t->size < s->size) return -(i + 1);
+    return 0;
+    
+}
+
+size_t str_idx(str *t, char e) {
+    size_t i = 0;
+    while(i < t->size) {
+        if(t->data[i] == e) return i;
+        ++i;
+    }
+    return i;
+}
+
+size_t str_find(str *t, str *s) {
+    // Compute the longest prefix suffix (LPS) array
+    size_t *lps = (size_t*)malloc(s->size * sizeof(size_t));
+    size_t len = 0;
+    lps[0] = 0;
+    size_t i = 1;
+    while (i < s->size) {
+        if (s->data[i] == s->data[len]) {
+            len++;
+            lps[i] = len;
+            i++;
+        } else {
+            if (len != 0) {
+                len = lps[len - 1];
+            } else {
+                lps[i] = 0;
+                i++;
+            }
+        }
+    }
+
+    // Perform the KMP search
+    i = 0; // index for t
+    size_t j = 0; // index for s
+    while (i < t->size) {
+        if (s->data[j] == t->data[i]) {
+            i++;
+            j++;
+        }
+
+        if (j == s->size) {
+            free(lps);
+            return i - j;
+        } else if (i < t->size && s->data[j] != t->data[i]) {
+            if (j != 0) {
+                j = lps[j - 1];
+            } else {
+                i++;
+            }
+        }
+    }
+
+    free(lps);
+    return t->size;
 }
 
 str *str_from(const char *s) {
@@ -144,4 +217,11 @@ void str_extend_cstr(str *t, const char *s) {
 void str_print(str *t) {
     for(char *i = str_begin(t); i != str_end(t); ++i)
         printf("%c", *i);
+}
+
+void str_print_splice(str *t, const str *delim) {
+    for(char *i = str_begin(t); i != str_end(t); ++i) {
+        printf("%c", *i);
+        if(i + 1 != str_end(t)) str_print(delim);
+    }
 }
