@@ -1,4 +1,6 @@
-#include <stddef.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #ifndef VEC_DEF_H
 #define VEC_DEF_H
