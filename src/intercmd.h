@@ -1,13 +1,18 @@
+#include "state.h"
 #include <vector/str.h>
 
 #ifndef INTERCMD_H
 #define INTERCMD_H
 
-int cd(str* path);
+#define CMD_NOT_FOUND -1
+
+int exec_cmd(shell_state *state, strvec *argv);
+
+int cd(strvec *path);
 int pwd(void);
-int echo(str* message);
-int export_var(str* var, str* value);
-int bg(void);
-int exit(void);
+int echo(strvec *message);
+int export_vars(strvec *vars);
+int bg(shell_state *state);
+int exit_shell(shell_state *state);
 
 #endif // INTERCMD_H
