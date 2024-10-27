@@ -10,11 +10,12 @@
 
 int shell(char history_flag) {
     char *host;
-    str prompt, command;
-    shell_state state;
+    str *prompt, *command;
+    shell_state *state;
+    int eval_code;
+    eval_result *evaluated;
     wordexp_t p;
 
-    str_init(&prompt); str_init(&command);
     host = (char*)malloc(sizeof(char) * (1 + _SC_HOST_NAME_MAX));
     wordexp(HISTORY_FILE, &p, 0);
 
@@ -37,21 +38,30 @@ int shell(char history_flag) {
         history_flag = false;
     }
 
-    while(true) {
+    state = shell_state_create();
+    prompt = state->prompt; command = state->command;
+    evaluated = eval_result_create();
+    while(!state->exiting) {
         gethostname(host, _SC_HOST_NAME_MAX);
-        set_prompt(&prompt, getenv("USER"), host, getenv("PWD"), "@");
-        get_command(&command, &prompt, history_flag);
+        set_prompt(prompt, getenv("USER"), host, getenv("PWD"), "@");
 
-        state.prompt = &prompt;
-        state.command = &command;
-        eval(&state);
+        get_command(command, prompt, history_flag);
+        eval_code = eval(state, false, evaluated);
+        
+        str_pop_back(prompt, 2);
+        str_extend_cstr(prompt, "> ");
+        while(eval_code == EVAL_WAITING) {
+            get_command(command, prompt, history_flag);
+            eval_code = eval(state, true, evaluated);
+        }
 
         if(history_flag) write_history(p.we_wordv[0]);
     }
 
-    str_del(&prompt);
-    str_del(&command);
+    wordfree(&p);
     free(host);
+    shell_state_free(state);
+    eval_result_free(evaluated);
 
     return EXIT_SUCCESS;
 }
