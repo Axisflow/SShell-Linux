@@ -13,6 +13,7 @@
 
 #define EXEC_DONE 0
 #define EXEC_FORK_ERROR -1
+#define EXEC_FILE_ERROR -2
 
 typedef struct EVAL_RESULT {
     str *expended_cmd;

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #include <fcntl.h>
 #include <string.h>
 #include "executor.h"
@@ -11,23 +12,30 @@ eval_result *eval_result_create(void) {
     eval_result *result = (eval_result*)malloc(sizeof(eval_result));
     result->expended_cmd = str_create();
     result->current_ps_args = strvec_create();
+    result->redir_filename = str_create();
     return result;
 }
 
 void eval_result_free(eval_result *result) {
     str_free(result->expended_cmd);
     strvec_free(result->current_ps_args);
+    str_free(result->redir_filename);
     free(result);
 }
 
 int set_file_descriptor(const char *file_redir, int new_fd, int *in_fd, int *out_fd, int *err_fd) {
     if(strcmp(file_redir, "<") == 0) {
+        if(*in_fd != STDIN_FILENO) close(*in_fd);
         *in_fd = new_fd;
     } else if(strcmp(file_redir, ">") == 0 || strcmp(file_redir, ">>") == 0) {
+        if(*out_fd != STDOUT_FILENO) close(*out_fd);
         *out_fd = new_fd;
     } else if(strcmp(file_redir, "2>") == 0 || strcmp(file_redir, "2>>") == 0) {
+        if(*err_fd != STDERR_FILENO) close(*err_fd);
         *err_fd = new_fd;
     } else if(strcmp(file_redir, "&>") == 0 || strcmp(file_redir, "&>>") == 0) {
+        if(*out_fd != STDOUT_FILENO) close(*out_fd);
+        if(*err_fd != STDERR_FILENO) close(*err_fd);
         *out_fd = new_fd;
         *err_fd = new_fd;
     } else {
@@ -39,7 +47,7 @@ int set_file_descriptor(const char *file_redir, int new_fd, int *in_fd, int *out
 
 int get_file_descriptor(const char *file_redir, str *file) {
     int fd;
-    const char *file_str = str_to(file);
+    char *file_str = str_to(file);
     if(strcmp(file_redir, "<") == 0) {
         fd = open(file_str, O_RDONLY);
     } else if(strcmp(file_redir, ">") == 0) {
@@ -55,11 +63,9 @@ int get_file_descriptor(const char *file_redir, str *file) {
     } else if(strcmp(file_redir, "&>>") == 0) {
         fd = open(file_str, O_WRONLY | O_CREAT | O_APPEND, 0644);
     } else {
-        free(file_str);
-        return -1;
+        fd = -1;
     }
 
-    close(fd);
     free(file_str);
     return fd;
 }
@@ -107,17 +113,18 @@ int eval(shell_state *state, boolean continue_eval, eval_result *result) {
             if(c == '$') {
                 if(i - env_start == 1) {
                     expend_env(cmd, env_start, i + 1);
-                    i = env_start;
+                    i = env_start - 1;
                     env_start = -1;
-                    
                 } else {
                     expend_env(cmd, env_start, i);
-                    i = env_start;
+                    i = env_start - 1;
                     env_start = i;
                 }
+            } else if(c == '\\' && str_get(cmd, i + 1) == -1) {
+                in_escape = true;
             } else if(c == ' ' || c == -1 || c == '\n' || c == '\t' || c == '\r' || c == '\v' || c == '\f' || c == '"' || c == '\'' || c == '\\') {
                 expend_env(cmd, env_start, i);
-                i = env_start;
+                i = env_start - 1;
                 env_start = -1;
             }
         } else if(in_escape) {
@@ -280,8 +287,6 @@ int eval(shell_state *state, boolean continue_eval, eval_result *result) {
         }
     }
 
-    strvec_print(args);
-
     result->expended_cmd_idx = i;
     result->in_what_quote = in_what_quote;
     result->env_start = env_start;
@@ -289,24 +294,112 @@ int eval(shell_state *state, boolean continue_eval, eval_result *result) {
     result->current_ps_in_fd = in_fd;
     result->current_ps_out_fd = out_fd;
     result->current_ps_err_fd = err_fd;
-    str_free(cmd);
     return ret;
 }
 
 int exec(shell_state *state, strvec *argv, boolean bg, int in_fd, int out_fd, int err_fd) {
-    
+    int ret = EXEC_DONE, tmp_fd,
+        backup_in_fd = STDIN_FILENO,
+        backup_out_fd = STDOUT_FILENO,
+        backup_err_fd = STDERR_FILENO;
+
+    if(in_fd != backup_in_fd) {
+        tmp_fd = dup(backup_in_fd);
+        if(tmp_fd == -1 || dup2(in_fd, backup_in_fd) == -1) {
+            fprintf(stderr, "Error: Cannot duplicate file descriptor.\n");
+            return EXEC_FILE_ERROR;
+        } else {
+            backup_in_fd = tmp_fd;
+        }
+    }
+
+    if(out_fd != STDOUT_FILENO) {
+        tmp_fd = dup(backup_out_fd);
+        if(tmp_fd == -1 || dup2(out_fd, backup_out_fd) == -1) {
+            fprintf(stderr, "Error: Cannot duplicate file descriptor.\n");
+            return EXEC_FILE_ERROR;
+        } else {
+            backup_out_fd = tmp_fd;
+        }
+    }
+
+    if(err_fd != STDERR_FILENO) {
+        tmp_fd = dup(backup_err_fd);
+        if(tmp_fd == -1 || dup2(err_fd, backup_err_fd) == -1) {
+            fprintf(stderr, "Error: Cannot duplicate file descriptor.\n");
+            return EXEC_FILE_ERROR;
+        } else {
+            backup_err_fd = tmp_fd;
+        }
+    }
+
+    if(bg || (state->error_level = exec_cmd(state, argv)) == CMD_NOT_FOUND) {
+        pid_t pid = fork();
+
+        if(pid == -1) {
+            fprintf(stderr, "Error: Cannot fork process.\n");
+            return EXEC_FORK_ERROR;
+        }
+
+        if(pid == 0) {
+            if((state->error_level = exec_cmd(state, argv)) == CMD_NOT_FOUND) {
+                char **args = (char**)malloc((argv->size + 1) * sizeof(char*));
+                for(size_t i = 0; i < argv->size; i++) {
+                    args[i] = str_to(&argv->data[i]);
+                }
+                args[argv->size] = NULL;
+
+                execvp(args[0], args);
+                fprintf(stderr, "Error: Command %s not found.\n", str_to(strvec_begin(argv)));
+                exit(EXIT_FAILURE);
+            } else {
+                exit(state->error_level);
+            }
+        } else {
+            if(bg) {
+                add_process(state, pid, argv);
+            } else {
+                int status;
+                waitpid(pid, &status, 0);
+                if(WIFEXITED(status)) {
+                    state->error_level = WEXITSTATUS(status);
+                }
+            }
+        }
+    }
+
+    if(in_fd != backup_in_fd) {
+        dup2(backup_in_fd, in_fd);
+        close(backup_in_fd);
+    }
+
+    if(out_fd != backup_out_fd) {
+        dup2(backup_out_fd, out_fd);
+        close(backup_out_fd);
+    }
+
+    if(err_fd != backup_err_fd) {
+        dup2(backup_err_fd, err_fd);
+        close(backup_err_fd);
+    }
+
+    return ret;
 }
 
 char *expend_env(str *cmd, size_t dollor_sign_idx, size_t end) {
-    str *env_name_str = str_sub(cmd, dollor_sign_idx + 1, end);
-    char *env_name = str_to(env_name_str);
-    char *after_env;
+    str *env_name_str = str_sub(cmd, dollor_sign_idx + 1, end), *pid_str;
+    char *env_name = str_to(env_name_str), *env_val, *after_env;
     if(env_name_str->size == 1 && str_get(env_name_str, 0) == '$') {
-        str *pid_str = ulong_to_str(getpid());
+        pid_str = ulong_to_str(getpid());
         after_env = str_replace(cmd, dollor_sign_idx, end, pid_str);
         str_free(pid_str);
     } else {
-        after_env = str_replace_cstr(cmd, dollor_sign_idx, end, getenv(env_name));
+        env_val = getenv(env_name);
+        if(env_val == NULL) {
+            after_env = str_replace(cmd, dollor_sign_idx, end, STR_EMPTY);
+        } else {
+            after_env = str_replace_cstr(cmd, dollor_sign_idx, end, env_val);
+        }
     }
 
     str_free(env_name_str);
