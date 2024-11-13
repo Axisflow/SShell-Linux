@@ -1,5 +1,6 @@
 #include <unistd.h>
 #include <stdio.h>
+#include <sys/wait.h>
 #include "intercmd.h"
 #include <utility/bool.h>
 
@@ -19,6 +20,10 @@ int exec_cmd(shell_state *state, strvec *argv) {
         ret = echo(args);
     else if(strcmp(cmd, "export") == 0)
         ret = export_vars(args);
+    else if(strcmp(cmd, "bg") == 0)
+        ret = bg(state);
+    else if(strcmp(cmd, "el") == 0)
+        ret = error_level(state);
     else if(strcmp(cmd, "exit") == 0)
         ret = exit_shell(state);
     else
@@ -29,19 +34,28 @@ int exec_cmd(shell_state *state, strvec *argv) {
     return ret;
 }
 
-int cd(strvec *path)
-{
+int cd(strvec *path) {
     char *p = strvec_to_cstr(path, STR_SPACE);
     char *home = getenv("HOME");
     int ret;
 
-    if(strlen(p) == 0)
+    if(strlen(p) == 0) {
+        free(p);
+        if(home == NULL) {
+            fprintf(stderr, "Error: Cannot get HOME environment variable.\n");
+            ret = -2;
+            return -ret;
+        }
+
         p = home;
+    }
 
     if((ret = chdir(p)) == -1)
         fprintf(stderr, "Error: Cannot change directory to %s\n", p);
 
-    free(p);
+    if(p != home)
+        free(p);
+    
     return -ret;
 }
 
@@ -85,6 +99,31 @@ int export_vars(strvec *name_eq_vars) {
             free(nev_cstr);
         }
 
+    return EXIT_SUCCESS;
+}
+
+int bg(shell_state *state) { // [Index] PID: {PID}, Command: {Command}
+    ps_node *node = state->processes_head->next;
+    int error_level;
+
+    printf("Background processes:\n");
+    while(node != state->processes_tail) { // if process exits, remove it from the list
+        printf("[%lu]\tPID: %d\tCommand: ", node->index, node->data.pid);
+        str_print_splice(strvec_begin(&node->data.command), STR_SPACE);
+        printf("\n");
+        node = node->next;
+
+        if(waitpid(node->prev->data.pid, &error_level, WNOHANG) != 0) {
+            remove_process(node->prev);
+            state->error_level = WEXITSTATUS(error_level);
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int error_level(shell_state *state) {
+    printf("%ld\n", state->error_level);
     return EXIT_SUCCESS;
 }
 

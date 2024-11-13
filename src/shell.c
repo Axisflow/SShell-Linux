@@ -9,7 +9,7 @@
 #include "readline/history.h"
 
 int shell(char history_flag) {
-    char *host;
+    char *host, *cwd;
     str *prompt, *command;
     shell_state *state;
     int eval_code;
@@ -43,14 +43,17 @@ int shell(char history_flag) {
     evaluated = eval_result_create();
     while(!state->exiting) {
         gethostname(host, _SC_HOST_NAME_MAX);
-        set_prompt(prompt, getenv("USER"), host, getenv("PWD"), "@");
+        set_prompt(prompt, getenv("USER"), host, cwd = getcwd(NULL, 0), "@");
+        free(cwd);
 
         get_command(command, prompt, history_flag);
         eval_code = eval(state, false, evaluated);
         
-        str_pop_back(prompt, 2);
-        str_extend_cstr(prompt, "> ");
         while(eval_code == EVAL_WAITING) {
+            gethostname(host, _SC_HOST_NAME_MAX);
+            set_prompt(prompt, getenv("USER"), host, cwd = getcwd(NULL, 0), ">");
+            free(cwd);
+
             get_command(command, prompt, history_flag);
             eval_code = eval(state, true, evaluated);
         }

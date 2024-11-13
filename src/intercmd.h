@@ -13,6 +13,7 @@ int pwd(void);
 int echo(strvec *message);
 int export_vars(strvec *vars);
 int bg(shell_state *state);
+int error_level(shell_state *state);
 int exit_shell(shell_state *state);
 
 #endif // INTERCMD_H
