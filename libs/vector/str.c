@@ -27,11 +27,11 @@ void str_free(str *t) {
     free(t);
 }
 
-str *str_copy(str *t) {
+str *str_copy(const str *t) {
     return str_sub(t, 0, t->size);
 }
 
-str *str_sub(str *t, size_t i, size_t j) {
+str *str_sub(const str *t, size_t i, size_t j) {
     str *s = (str*)malloc(sizeof(str));
 
     s->data = (char*)malloc(t->capacity * sizeof(char));
@@ -49,7 +49,7 @@ void str_reverse(str *t) {
     }
 }
 
-size_t str_cmp(str *t, str *s) { 
+size_t str_cmp(const str *t, const str *s) { 
     size_t i = 0;
     while(i < t->size && i < s->size) {
         if(t->data[i] > s->data[i]) return i + 1;
@@ -62,7 +62,7 @@ size_t str_cmp(str *t, str *s) {
     return 0;
 }
 
-size_t str_cmp_cstr(str *t, const char *s) {
+size_t str_cmp_cstr(const str *t, const char *s) {
     str *tmp = str_from(s);
     size_t cmp = str_cmp(t, tmp);
     str_free(tmp);
@@ -76,7 +76,7 @@ char *str_replace_cstr(str *t, size_t i, size_t j, const char *s) {
     return ret;
 }
 
-size_t str_idx(str *t, size_t i, char e) {
+size_t str_idx(const str *t, size_t i, char e) {
     while(i < t->size) {
         if(t->data[i] == e) return i;
         ++i;
@@ -84,7 +84,7 @@ size_t str_idx(str *t, size_t i, char e) {
     return i;
 }
 
-size_t str_find(str *t, size_t i, str *s) {
+size_t str_find(const str *t, size_t i, const str *s) {
     // Compute the longest prefix suffix (LPS) array
     size_t *lps = (size_t*)malloc(s->size * sizeof(size_t));
     size_t len = 0;
@@ -129,7 +129,7 @@ size_t str_find(str *t, size_t i, str *s) {
     return t->size;
 }
 
-size_t str_find_cstr(str *t, size_t i, const char *s) {
+size_t str_find_cstr(const str *t, size_t i, const char *s) {
     str *tmp = str_from(s);
     size_t idx = str_find(t, i, tmp);
     str_free(tmp);
@@ -150,7 +150,7 @@ str *str_from(const char *s) {
     return t;
 }
 
-char *str_to(str *t) {
+char *str_to(const str *t) {
     char *s = (char*)malloc((t->size + 1) * sizeof(char));
 
     memcpy(s, t->data, t->size * sizeof(char));
@@ -159,23 +159,23 @@ char *str_to(str *t) {
     return s;
 }
 
-char *str_begin(str *t) {
+char *str_begin(const str *t) {
     return t->data;
 }
 
-char *str_end(str *t) {
+char *str_end(const str *t) {
     return t->data + t->size;
 }
 
-char str_front(str *t) {
+char str_front(const str *t) {
     return t->data[0];
 }
 
-char str_back(str *t) {
+char str_back(const str *t) {
     return t->data[t->size - 1];
 }
 
-char *str_at(str *t, size_t i) {
+char *str_at(const str *t, size_t i) {
     return t->data + i;
 }
 
@@ -185,7 +185,7 @@ void str_swap(str *t, size_t i, size_t j) {
     t->data[j] = tmp;
 }
 
-char str_get(str *t, size_t i) {
+char str_get(const str *t, size_t i) {
     return t->data[i];
 }
 
@@ -231,7 +231,7 @@ void str_pop_back(str *t, size_t n) {
     __str_optimal_capacity(t, t->size);
 }
 
-void str_assign(str *t, str *s) {
+void str_assign(str *t, const str *s) {
     __str_optimal_capacity(t, s->size);
     t->size = s->size;
     memcpy(t->data, s->data, s->size * sizeof(char));
@@ -243,7 +243,7 @@ void str_assign_cstr(str *t, const char *s) {
     memcpy(t->data, s, t->size * sizeof(char));
 }
 
-void str_extend(str *t, str *s) {
+void str_extend(str *t, const str *s) {
     __str_optimal_capacity(t, t->size + s->size);
     memcpy(t->data + t->size, s->data, s->size * sizeof(char));
     t->size += s->size;
@@ -255,12 +255,12 @@ void str_extend_cstr(str *t, const char *s) {
     t->size += strlen(s);
 }
 
-void str_print(str *t) {
+void str_print(const str *t) {
     for(char *i = str_begin(t); i != str_end(t); ++i)
         printf("%c", *i);
 }
 
-void str_print_splice(str *t, const str *delim) {
+void str_print_splice(const str *t, const str *delim) {
     for(char *i = str_begin(t); i != str_end(t); ++i) {
         printf("%c", *i);
         if(i + 1 != str_end(t)) str_print(delim);
@@ -279,7 +279,7 @@ char *str_erase(str *t, size_t i) {
     return str_throw(t, i, i + 1);
 }
 
-char *str_put(str *t, size_t i, str *s) {
+char *str_put(str *t, size_t i, const str *s) {
     __str_optimal_capacity(t, t->size + s->size);
     memmove(t->data + i + s->size, t->data + i, (t->size - i) * sizeof(char));
     memcpy(t->data + i, s->data, s->size * sizeof(char));
@@ -294,7 +294,7 @@ char *str_throw(str *t, size_t i, size_t j) {
     return t->data + i;
 }
 
-char *str_replace(str *t, size_t i, size_t j, str *s) {
+char *str_replace(str *t, size_t i, size_t j, const str *s) {
     __str_optimal_capacity(t, t->size + s->size - (j - i));
     memmove(t->data + i + s->size, t->data + j, (t->size - j) * sizeof(char));
     memcpy(t->data + i, s->data, s->size * sizeof(char));

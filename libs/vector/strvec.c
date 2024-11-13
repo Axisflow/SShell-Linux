@@ -24,7 +24,7 @@ void strvec_free(strvec *t) {
     free(t);
 }
 
-size_t strvec_cmp(strvec *t, strvec *s) {
+size_t strvec_cmp(const strvec *t, const strvec *s) {
     size_t i = 0;
     while(i < t->size && i < s->size) {
         size_t cmp = str_cmp(&t->data[i], &s->data[i]);
@@ -38,7 +38,7 @@ size_t strvec_cmp(strvec *t, strvec *s) {
     return 0;
 }
 
-size_t strvec_idx(strvec *t, size_t start, str *s) {
+size_t strvec_idx(const strvec *t, size_t start, const str *s) {
     size_t i = start;
     while(i < t->size) {
         if(str_cmp(&t->data[i], s) == 0) return i;
@@ -47,20 +47,11 @@ size_t strvec_idx(strvec *t, size_t start, str *s) {
     return i;
 }
 
-size_t strvec_idx(strvec *t, str *s) {
-    size_t i = 0;
-    while(i < t->size) {
-        if(str_cmp(&t->data[i], s) == 0) return i;
-        ++i;
-    }
-    return i;
-}
-
-strvec *strvec_copy(strvec *t) {
+strvec *strvec_copy(const strvec *t) {
     return strvec_sub(t, 0, t->size);
 }
 
-strvec *strvec_sub(strvec *t, size_t i, size_t j) {
+strvec *strvec_sub(const strvec *t, size_t i, size_t j) {
     strvec *s = (strvec*)malloc(sizeof(strvec));
 
     s->data = (str*)malloc(t->capacity * sizeof(str));
@@ -74,40 +65,40 @@ strvec *strvec_sub(strvec *t, size_t i, size_t j) {
     return s;
 }
 
-str *strvec_at(strvec *t, size_t i) {
+str *strvec_at(const strvec *t, size_t i) {
     return t->data + i;
 }
 
-str *strvec_begin(strvec *t) {
+str *strvec_begin(const strvec *t) {
     return t->data;
 }
 
-str *strvec_end(strvec *t) {
+str *strvec_end(const strvec *t) {
     return t->data + t->size;
 }
 
-str strvec_get(strvec *t, size_t i) {
+str strvec_get(const strvec *t, size_t i) {
     return t->data[i];
 }
 
-void strvec_set(strvec *t, size_t i, str *e) {
+void strvec_set(strvec *t, size_t i, const str *e) {
     str_del(&t->data[i]);
     t->data[i] = *str_copy(e);
 }
 
-str strvec_front(strvec *t) {
+str strvec_front(const strvec *t) {
     str s; str_init(&s);
     str_assign(&s, &t->data[0]);
     return s;
 }
 
-str strvec_back(strvec *t) {
+str strvec_back(const strvec *t) {
     str s; str_init(&s);
     str_assign(&s, &t->data[t->size - 1]);
     return s;
 }
 
-str *strvec_insert(strvec *t, size_t i, str *e) {
+str *strvec_insert(strvec *t, size_t i, const str *e) {
     __strvec_optimal_capacity(t, t->size + 1);
     memmove(t->data + i + 1, t->data + i, (t->size - i) * sizeof(str));
     t->data[i] = *str_copy(e);
@@ -119,7 +110,7 @@ str *strvec_erase(strvec *t, size_t i) {
     return strvec_throw(t, i, i + 1);
 }
 
-str *strvec_put(strvec *t, size_t i, strvec *s) {
+str *strvec_put(strvec *t, size_t i, const strvec *s) {
     __strvec_optimal_capacity(t, t->size + s->size);
     memmove(t->data + i + s->size, t->data + i, (t->size - i) * sizeof(str));
     for(size_t j = 0; j < s->size; j++) {
@@ -137,7 +128,7 @@ str *strvec_throw(strvec *t, size_t i, size_t j) {
     return t->data + i;
 }
 
-str *strvec_replace(strvec *t, size_t i, size_t j, strvec *s) {
+str *strvec_replace(strvec *t, size_t i, size_t j, const strvec *s) {
     strvec_throw(t, i, j);
     return strvec_put(t, i, s);
 }
@@ -156,14 +147,14 @@ void strvec_reverse(strvec *t) {
     }
 }
 
-void strvec_fill(strvec *t, size_t start, size_t end, str *e) {
+void strvec_fill(strvec *t, size_t start, size_t end, const str *e) {
     for(size_t i = start; i < end; i++) {
         str_del(&t->data[i]);
         t->data[i] = *str_copy(e);
     }
 }
 
-void strvec_push_back(strvec *t, str *e) {
+void strvec_push_back(strvec *t, const str *e) {
     __strvec_optimal_capacity(t, t->size + 1);
     t->data[t->size++] = *str_copy(e);
 }
@@ -173,7 +164,7 @@ void strvec_pop_back(strvec *t, size_t n) {
     __strvec_optimal_capacity(t, t->size);
 }
 
-void strvec_assign(strvec *t, strvec *s) {
+void strvec_assign(strvec *t, const strvec *s) {
     strvec_clear(t);
     __strvec_optimal_capacity(t, s->size);
     t->size = s->size;
@@ -182,7 +173,7 @@ void strvec_assign(strvec *t, strvec *s) {
     }
 }
 
-void strvec_extend(strvec *t, strvec *s) {
+void strvec_extend(strvec *t, const strvec *s) {
     __strvec_optimal_capacity(t, t->size + s->size);
     for(size_t i = 0; i < s->size; i++) {
         t->data[t->size + i] = *str_copy(&s->data[i]);
@@ -195,7 +186,7 @@ void strvec_clear(strvec *t) {
     t->size = 0;
 }
 
-void strvec_resize(strvec *t, size_t n, str *e) {
+void strvec_resize(strvec *t, size_t n, const str *e) {
     if(n > t->size) {
         __strvec_optimal_capacity(t, n);
         strvec_fill(t, t->size, n, e);
@@ -205,7 +196,7 @@ void strvec_resize(strvec *t, size_t n, str *e) {
     }
 }
 
-void strvec_print(strvec *t) {
+void strvec_print(const strvec *t) {
     for(size_t i = 0; i < t->size; i++)
         str_print_splice(&t->data[i], STR_NEWLINE);
 }
