@@ -109,7 +109,17 @@ int eval(shell_state *state, boolean continue_eval, eval_result *result) {
     str_push_back(cmd, -1);
     for(; i < cmd->size; i++) {
         const char c = str_get(cmd, i);
-        if(env_start != -1) {
+        if(in_escape) {
+            if(c == -1) {
+                ret = EVAL_WAITING;
+                str_pop_back(cmd, 1);
+                i--;
+                break;
+            } else {
+                str_push_back(strvec_end(args) - 1, c);
+                in_escape = false;
+            }
+        } else if(env_start != -1) {
             if(c == '$') {
                 if(i - env_start == 1) {
                     expend_env(cmd, env_start, i + 1);
@@ -122,20 +132,10 @@ int eval(shell_state *state, boolean continue_eval, eval_result *result) {
                 }
             } else if(c == '\\' && str_get(cmd, i + 1) == -1) {
                 in_escape = true;
-            } else if(c == ' ' || c == -1 || c == '\n' || c == '\t' || c == '\r' || c == '\v' || c == '\f' || c == '"' || c == '\'' || c == '\\') {
+            } else if(c == ' ' || c == -1 || c == '\n' || c == '\t' || c == '\r' || c == '\v' || c == '\f' || c == '"' || c == '\'' || c == '\\' || c == ':') {
                 expend_env(cmd, env_start, i);
                 i = env_start - 1;
                 env_start = -1;
-            }
-        } else if(in_escape) {
-            if(c == -1) {
-                ret = EVAL_WAITING;
-                str_pop_back(cmd, 1);
-                i--;
-                break;
-            } else {
-                str_push_back(strvec_end(args) - 1, c);
-                in_escape = false;
             }
         } else if(in_what_quote == '\'') {
             if(c == -1) {
@@ -298,38 +298,30 @@ int eval(shell_state *state, boolean continue_eval, eval_result *result) {
 }
 
 int exec(shell_state *state, strvec *argv, boolean bg, int in_fd, int out_fd, int err_fd) {
-    int ret = EXEC_DONE, tmp_fd,
-        backup_in_fd = STDIN_FILENO,
-        backup_out_fd = STDOUT_FILENO,
-        backup_err_fd = STDERR_FILENO;
+    int ret = EXEC_DONE, backup_in_fd,
+        backup_out_fd, backup_err_fd;
 
-    if(in_fd != backup_in_fd) {
-        tmp_fd = dup(backup_in_fd);
-        if(tmp_fd == -1 || dup2(in_fd, backup_in_fd) == -1) {
+    if(in_fd != STDIN_FILENO) {
+        backup_in_fd = dup(STDIN_FILENO);
+        if(backup_in_fd == -1 || dup2(in_fd, STDIN_FILENO) == -1) {
             fprintf(stderr, "Error: Cannot duplicate file descriptor.\n");
             return EXEC_FILE_ERROR;
-        } else {
-            backup_in_fd = tmp_fd;
         }
     }
 
     if(out_fd != STDOUT_FILENO) {
-        tmp_fd = dup(backup_out_fd);
-        if(tmp_fd == -1 || dup2(out_fd, backup_out_fd) == -1) {
+        backup_out_fd = dup(STDOUT_FILENO);
+        if(backup_out_fd == -1 || dup2(out_fd, STDOUT_FILENO) == -1) {
             fprintf(stderr, "Error: Cannot duplicate file descriptor.\n");
             return EXEC_FILE_ERROR;
-        } else {
-            backup_out_fd = tmp_fd;
         }
     }
 
     if(err_fd != STDERR_FILENO) {
-        tmp_fd = dup(backup_err_fd);
-        if(tmp_fd == -1 || dup2(err_fd, backup_err_fd) == -1) {
+        backup_err_fd = dup(STDERR_FILENO);
+        if(backup_err_fd == -1 || dup2(err_fd, STDERR_FILENO) == -1) {
             fprintf(stderr, "Error: Cannot duplicate file descriptor.\n");
             return EXEC_FILE_ERROR;
-        } else {
-            backup_err_fd = tmp_fd;
         }
     }
 
@@ -358,6 +350,7 @@ int exec(shell_state *state, strvec *argv, boolean bg, int in_fd, int out_fd, in
         } else {
             if(bg) {
                 add_process(state, pid, argv);
+                printf("[Process running in background with PID %d]\n", pid);
             } else {
                 int status;
                 waitpid(pid, &status, 0);
@@ -368,18 +361,21 @@ int exec(shell_state *state, strvec *argv, boolean bg, int in_fd, int out_fd, in
         }
     }
 
-    if(in_fd != backup_in_fd) {
-        dup2(backup_in_fd, in_fd);
+    if(in_fd != STDIN_FILENO) {
+        close(in_fd);
+        dup2(backup_in_fd, STDIN_FILENO);
         close(backup_in_fd);
     }
 
-    if(out_fd != backup_out_fd) {
-        dup2(backup_out_fd, out_fd);
+    if(out_fd != STDOUT_FILENO) {
+        close(out_fd);
+        dup2(backup_out_fd, STDOUT_FILENO);
         close(backup_out_fd);
     }
 
-    if(err_fd != backup_err_fd) {
-        dup2(backup_err_fd, err_fd);
+    if(err_fd != STDERR_FILENO) {
+        close(err_fd);
+        dup2(backup_err_fd, STDERR_FILENO);
         close(backup_err_fd);
     }
 

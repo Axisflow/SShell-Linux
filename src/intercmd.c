@@ -1,8 +1,11 @@
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/wait.h>
 #include "intercmd.h"
 #include <utility/bool.h>
+
+char **__old_environ = NULL;
 
 int exec_cmd(shell_state *state, strvec *argv) {
     if(argv->size == 0)
@@ -95,28 +98,34 @@ int export_vars(strvec *name_eq_vars) {
 
             char *nev_cstr = str_to(nev);
             nev_cstr[eq_idx] = '\0';
-            setenv(nev_cstr, nev_cstr + eq_idx + 1, 1);
+            __setenv(nev_cstr, nev_cstr + eq_idx + 1);
             free(nev_cstr);
         }
 
     return EXIT_SUCCESS;
 }
 
-int bg(shell_state *state) { // [Index] PID: {PID}, Command: {Command}
-    ps_node *node = state->processes_head->next;
+int bg(shell_state *state) {
     int error_level;
 
-    printf("Background processes:\n");
-    while(node != state->processes_tail) { // if process exits, remove it from the list
-        printf("[%lu]\tPID: %d\tCommand: ", node->index, node->data.pid);
-        str_print_splice(strvec_begin(&node->data.command), STR_SPACE);
-        printf("\n");
+    for(ps_node *node = state->processes_head->next; node != state->processes_tail;) { // if process exits, remove it from the list
         node = node->next;
-
         if(waitpid(node->prev->data.pid, &error_level, WNOHANG) != 0) {
             remove_process(node->prev);
             state->error_level = WEXITSTATUS(error_level);
         }
+    }
+
+    if(state->processes_head->next == state->processes_tail) {
+        printf("No background processes running.\n");
+        return EXIT_SUCCESS;
+    }
+
+    printf("Background processes:\n");
+    for(ps_node *node = state->processes_head->next; node != state->processes_tail; node = node->next) {
+        printf("[%lu]\tPID: %d\tCommand: ", node->index, node->data.pid);
+        str_print_splice(strvec_begin(&node->data.command), STR_EMPTY);
+        printf("\n");
     }
 
     return EXIT_SUCCESS;
@@ -130,4 +139,44 @@ int error_level(shell_state *state) {
 int exit_shell(shell_state *state) {
     state->exiting = true;
     return EXIT_SUCCESS;
+}
+
+int __setenv(const char *name, const char *value) { // modify __environ
+    if(__old_environ == NULL) {
+        __old_environ = __environ;
+        
+        // copy __environ
+        size_t env_size;
+        for(env_size = 0; __environ[env_size] != NULL; env_size++);
+        __environ = malloc((env_size + 1) * sizeof(char *));
+        for(size_t i = 0; i < env_size; i++) {
+            __environ[i] = malloc(strlen(__old_environ[i]) + 1);
+            strcpy(__environ[i], __old_environ[i]);
+        }
+
+        __environ[env_size] = NULL;
+    }
+
+    char **env;
+    for(env = __environ; *env != NULL; env++) {
+        str *env_str = str_from(*env);
+        size_t eq_idx = str_idx(env_str, 0, '=');
+        str_free(env_str);
+
+        if(eq_idx == 0) continue;
+
+        if(strncmp(*env, name, eq_idx) == 0) {
+            *env = realloc(*env, strlen(name) + strlen(value) + 2);
+            sprintf(*env, "%s=%s", name, value);
+            return 0;
+        }
+    }
+
+    size_t env_size = env - __environ;
+    __environ = realloc(__environ, (env_size + 2) * sizeof(char *));
+    __environ[env_size] = malloc(strlen(name) + strlen(value) + 2);
+    sprintf(__environ[env_size], "%s=%s", name, value);
+    __environ[env_size + 1] = NULL;
+
+    return 0;
 }

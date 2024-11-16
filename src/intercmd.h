@@ -16,4 +16,6 @@ int bg(shell_state *state);
 int error_level(shell_state *state);
 int exit_shell(shell_state *state);
 
+int __setenv(const char *name, const char *value);
+
 #endif // INTERCMD_H
